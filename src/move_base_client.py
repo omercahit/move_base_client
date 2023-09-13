@@ -7,13 +7,14 @@ from pymongo import MongoClient
 import pprint
 from bson.objectid import ObjectId
 import json
+import time
 
 def movebase_client():
 
     client = actionlib.SimpleActionClient('move_base',MoveBaseAction)
     client.wait_for_server()
 
-    hamal = collection.find_one({"data" : "robot3"})
+
     goal = MoveBaseGoal()
     goal.target_pose.header.frame_id = "map"
     goal.target_pose.header.stamp = rospy.Time.now()
@@ -27,6 +28,9 @@ def movebase_client():
 
     client.send_goal(goal)
     wait = client.wait_for_result()
+        
+    collection.update_one({"data":"robot3"}, { "$set": {"target_executed":1}})
+        
     if not wait:
         rospy.logerr("Action server not available!")
         rospy.signal_shutdown("Action server not available!")
@@ -35,16 +39,25 @@ def movebase_client():
 
 
 if __name__ == '__main__':
+       
+    client=MongoClient()
+    client = MongoClient("mongodb://localhost:27017/")
+    db = client.ros_db
+    collection = db.ros_db_col
     
-    try:
-        client=MongoClient()
-        client = MongoClient("mongodb://localhost:27017/")
-        db = client.ros_db
-        collection = db.ros_db_col
+    rospy.init_node('move_base_client')
     
-        rospy.init_node('move_base_client')
-        result = movebase_client()
-        if result:
-            rospy.loginfo("Goal execution done!")
-    except rospy.ROSInterruptException:
-        rospy.loginfo("Navigation test finished.")
+    while True:
+        hamal = collection.find_one({"data" : "robot3"})
+        if hamal["target_executed"] == 0:
+            result = movebase_client()
+            if result:
+                rospy.loginfo("Goal execution done!")
+        else:
+            print("No new target!")
+        time.sleep(1)
+    
+
+    #rate = rospy.Rate(10)
+    while not rospy.is_shutdown():
+        rate.sleep()
